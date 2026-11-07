@@ -1,0 +1,2 @@
+# DATASAGE-Multi-Agent-Orchestration-for-SQL-Analytics-and-ETL-Automation.
+An LLM-powered multi-agent data platform featuring intelligent request routing, dynamic LLM selection based on task complexity, low-cost model-driven SQL safety validation, database-aware context generation using high-capability LLMs, stateful SQL execution, and a ReAct-based ETL agent for iterative data extraction and transformation.
