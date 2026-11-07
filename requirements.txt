@@ -1,0 +1,32 @@
+# Core orchestration
+langchain
+langchain-core
+langgraph
+
+# Free-tier LLM providers
+langchain-groq
+langchain-google-genai
+
+# Data processing
+pandas
+numpy
+pyarrow
+
+# Database
+psycopg2-binary
+sqlalchemy
+
+# Validation and structured outputs
+pydantic
+
+# Utilities
+python-dotenv
+requests
+httpx
+orjson
+pyyaml
+tenacity
+faker
+
+# Development
+ipython
