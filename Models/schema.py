@@ -28,3 +28,9 @@ class RouterSchema(BaseModel):
 class DataAgentSchema(BaseModel):
     messages : Annotated[list,add] = Field(..., description="List of messages to be processed by the Data agent")
     route_response : str = Field(..., description="The response from the router indicating whether to route to SQL or ETL operations")
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    response: str

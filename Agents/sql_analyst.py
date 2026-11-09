@@ -55,7 +55,12 @@ def prompt_query_context(state: AgentSchema) -> dict:
 def generate_Sql(state: AgentSchema) -> dict:
     llm = pick_llm("high")
     response = llm.invoke(state.prompt_Query_context).content
+
+    response = response.strip()
+    response = response.replace("```sql", "").replace("```", "").strip()
+
     return {"generated_SQL_query": response}
+
 
 
 def is_safe_sql(state: AgentSchema) -> dict:
@@ -65,10 +70,19 @@ def is_safe_sql(state: AgentSchema) -> dict:
 
     prompt = f"""
     You are an SQL Judge. Determine whether this SQL query is safe.
+
     It must only retrieve data and must not modify the database.
+
     Reject INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE
     or any other database-modifying commands.
-    Respond with Yes or No and provide comments.
+
+    Return your decision in valid JSON format.
+
+    The JSON response must contain:
+    - answer: "Yes" or "No"
+    - comments: Explanation of your safety decision.
+
+    Do not include Markdown or additional text outside the JSON response.
 
     SQL Query: {sql_query}
     """
@@ -184,7 +198,7 @@ if __name__ == "__main__":
 
     input_schema = {
         "messages": [],
-        "user_question": "What are the different types of Payment Methods we have in our database?",
+        "user_question": "Delete all records from the rides table.",
         "curated_questions": "",
         "prompt_Query_context": "",
         "generated_SQL_query": "",

@@ -112,7 +112,7 @@ class DatabaseUtil:
         except Exception as e:
             self.connection.rollback()
             print(f"Error executing query: {e}")
-            return None
+            return f"SQL Execution Error: {str(e)}"
 
         finally:
             if cursor:
