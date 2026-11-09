@@ -14,13 +14,18 @@ app=FastAPI(title="DataSage API")
 def health_check():
     return {"status": "healthy"}
 
-@app.post("/chat",response_model=ChatResponse)
-def chat(request:ChatRequest):
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest):
     try:
-        response=data_agent.invoke({
-            "messages":[HumanMessage(content=request.message)],
-            "route_response":""
+        result = data_agent.invoke({
+            "messages": [HumanMessage(content=request.message)],
+            "route_response": ""
         })
-        return ChatResponse(response=response["messages"][-1].content)
+
+        return ChatResponse(
+            response=result["messages"][-1].content,
+            route_used=result["route_response"]
+        )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -34,3 +34,4 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    route_used: Literal["sql", "etl"]
