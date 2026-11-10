@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "http://127.0.0.1:8000/chat"
+API_URL = "https://datasage-multi-agent-orchestration-for.onrender.com/chat"
 
 
 # -------------------- SESSION INITIALIZATION --------------------
