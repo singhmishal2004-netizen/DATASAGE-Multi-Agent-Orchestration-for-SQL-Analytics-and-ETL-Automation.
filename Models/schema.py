@@ -34,4 +34,4 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    route_used: Literal["sql", "etl"]
+    route_used: Literal["sql", "etl","greeting"] = Field(..., description="Indicates whether the user's question was routed to SQL or ETL operations or greeting")

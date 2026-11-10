@@ -1,7 +1,7 @@
 
 import os
 import sys
-
+import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.llm_pick import pick_llm
@@ -35,6 +35,7 @@ def extract_load_tool(url: str, output_folder: str, format: str) -> str:
     return etl_tools.extract_load(url, output_folder, format)
 
 
+
 @tool
 def transform_load_tool(
     input_file_path: str,
@@ -43,8 +44,7 @@ def transform_load_tool(
     user_question: str
 ) -> str:
     """
-    Transform data using Pandas according to the user's requirement
-    and save the transformed data.
+    Transform data using an approved Pandas transformation plan.
 
     Args:
         input_file_path: Input file path.
@@ -55,62 +55,86 @@ def transform_load_tool(
 
     etl_tools = ETLTools()
 
+    # First, read the input data context.
     top_3_rows = etl_tools.transform_load_context(input_file_path)
 
-    # High reasoning model for Pandas code generation
+    if top_3_rows.startswith("Failed to read"):
+        return top_3_rows
+
+    if top_3_rows.startswith("Unsupported file format"):
+        return top_3_rows
+
+    # Ask the LLM for a structured transformation plan.
     llm = pick_llm("high")
 
     prompt = f"""
-You are a Python Data Analyst who uses Pandas.
+You are a data transformation planner.
 
-Generate ONLY executable Python Pandas code.
+Generate a JSON transformation plan.
+Do not generate Python code.
 
-Requirements:
-1. Read the input file using Pandas.
-2. Perform the transformation requested by the user.
-3. Save the transformed dataframe inside the given output folder.
-4. Save the result in the requested output format.
-5. Create the output folder if it does not exist.
-6. Do not include explanations or markdown.
+Available operations:
+
+1. drop_duplicates
+   {{"operation": "drop_duplicates"}}
+
+2. drop_nulls
+   {{"operation": "drop_nulls", "columns": ["column_name"]}}
+
+3. fill_nulls
+   {{"operation": "fill_nulls", "column": "column_name", "value": "replacement"}}
+
+4. rename_columns
+   {{"operation": "rename_columns", "mapping": {{"old_name": "new_name"}}}}
+
+5. select_columns
+   {{"operation": "select_columns", "columns": ["column1", "column2"]}}
+
+6. sort_values
+   {{"operation": "sort_values", "columns": ["column_name"]}}
+
+Return only valid JSON in this format:
+
+{{
+    "operations": []
+}}
 
 Input file: {input_file_path}
 Output folder: {output_folder}
 Output format: {output_format}
 
-User's requirement:
+User requirement:
 {user_question}
 
-Data context:
+Available data:
 {top_3_rows}
 """
 
-    response = llm.invoke(prompt).content
+    try:
+        response = llm.invoke(prompt).content.strip()
 
-    # Clean generated code
-    pandas_code = response.strip()
+        # Remove Markdown fences if present.
+        if response.startswith("```"):
+            response = response.split("\n", 1)[-1]
+            response = response.rsplit("```", 1)[0].strip()
 
-    if pandas_code.startswith("```"):
-        pandas_code = pandas_code.split("\n", 1)[-1]
-        pandas_code = pandas_code.rsplit("```", 1)[0].strip()
+        plan = json.loads(response)
 
-    if pandas_code.startswith("python"):
-        pandas_code = pandas_code[len("python"):].strip()
+    except (json.JSONDecodeError, AttributeError) as e:
+        return f"Transformation failed: Invalid JSON plan: {e}"
 
-    # Execute generated Pandas code
-    results = etl_tools.execute_code(pandas_code)
+    except Exception as e:
+        return f"Transformation failed during planning: {e}"
 
-    return f"""
-Transformation completed.
+    # Execute only approved operations.
+    result = etl_tools.execute_plan(
+        input_file_path=input_file_path,
+        output_folder=output_folder,
+        output_format=output_format,
+        plan=plan
+    )
 
-Output folder: {output_folder}
-Output format: {output_format}
-
-Pandas Code Executed:
-{pandas_code}
-
-Execution Result:
-{results}
-"""
+    return result
 
 
 # ------------------------------------ TOOLKIT ------------------------------------ #

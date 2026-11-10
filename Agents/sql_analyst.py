@@ -4,16 +4,19 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from Guardrails.sql_guard import validate_sql
 from utils.llm_pick import pick_llm
 from utils.database import DatabaseUtil
-from Models.schema import AgentSchema, JudgeSchema
+from Models.schema import AgentSchema
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import StateGraph, START, END
 
 
 def curate_ques(state: AgentSchema) -> dict:
     user_question = state.user_question
+
     llm = pick_llm("low")
+
     response = llm.invoke(
         f"Curate the following user question into a more structured and clear question: {user_question}"
     ).content
@@ -54,6 +57,7 @@ def prompt_query_context(state: AgentSchema) -> dict:
 
 def generate_Sql(state: AgentSchema) -> dict:
     llm = pick_llm("high")
+
     response = llm.invoke(state.prompt_Query_context).content
 
     response = response.strip()
@@ -62,40 +66,31 @@ def generate_Sql(state: AgentSchema) -> dict:
     return {"generated_SQL_query": response}
 
 
+# ---------------------------- SQL SAFETY CHECK ---------------------------- #
 
 def is_safe_sql(state: AgentSchema) -> dict:
+
     sql_query = state.generated_SQL_query
-    llm = pick_llm("low")
-    llm_judge = llm.with_structured_output(JudgeSchema)
 
-    prompt = f"""
-    You are an SQL Judge. Determine whether this SQL query is safe.
+    # Deterministic SQL validation using SQLGlot
+    is_valid, reason = validate_sql(sql_query)
 
-    It must only retrieve data and must not modify the database.
-
-    Reject INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, CREATE
-    or any other database-modifying commands.
-
-    Return your decision in valid JSON format.
-
-    The JSON response must contain:
-    - answer: "Yes" or "No"
-    - comments: Explanation of your safety decision.
-
-    Do not include Markdown or additional text outside the JSON response.
-
-    SQL Query: {sql_query}
-    """
-
-    response = llm_judge.invoke(prompt).model_dump()
+    if not is_valid:
+        return {
+            "is_safe": "No",
+            "comments": reason
+        }
 
     return {
-        "is_safe": response['answer'],
-        "comments": response['comments']
+        "is_safe": "Yes",
+        "comments": "SQL query passed deterministic validation."
     }
 
 
+# ---------------------------- CANCEL UNSAFE SQL ---------------------------- #
+
 def canceled_sql(state: AgentSchema) -> dict:
+
     final_answer = (
         f"The generated SQL query was deemed unsafe to execute. "
         f"Reason: {state.comments}. Therefore, it will not be executed."
@@ -107,7 +102,18 @@ def canceled_sql(state: AgentSchema) -> dict:
     }
 
 
+# ---------------------------- EXECUTE SQL ---------------------------- #
+
 def execute_sql(state: AgentSchema) -> dict:
+
+    # Final safety check immediately before database execution
+    is_valid, reason = validate_sql(state.generated_SQL_query)
+
+    if not is_valid:
+        return {
+            "sql_query_execution_result": f"Execution blocked: {reason}"
+        }
+
     conn_details = {
         "host": os.environ['host'],
         "port": os.environ['port'],
@@ -120,14 +126,25 @@ def execute_sql(state: AgentSchema) -> dict:
 
     try:
         result = obj.execute_sql(state.generated_SQL_query)
-        return {"sql_query_execution_result": result}
+
+        return {
+            "sql_query_execution_result": result
+        }
+
     except Exception as e:
-        return {"sql_query_execution_result": f"Error: {str(e)}"}
+
+        return {
+            "sql_query_execution_result": f"Error: {str(e)}"
+        }
+
     finally:
         obj.close_connection()
 
 
+# ---------------------------- FINAL ANSWER ---------------------------- #
+
 def represent_final_answer(state: AgentSchema) -> dict:
+
     llm_pick = pick_llm("low")
 
     prompt = f"""
@@ -165,6 +182,7 @@ sql_agent_graph.add_edge("generate_sql", "is_safe_sql")
 
 
 def is_safe_sql_edge(state: AgentSchema) -> str:
+
     return "execute_sql" if state.is_safe == "Yes" else "canceled_sql"
 
 
@@ -181,6 +199,7 @@ sql_agent_graph.add_edge("canceled_sql", END)
 sql_agent_graph.add_edge("execute_sql", "represent_final_answer")
 sql_agent_graph.add_edge("represent_final_answer", END)
 
+
 sql_analyst = sql_agent_graph.compile()
 
 
@@ -189,6 +208,7 @@ sql_analyst = sql_agent_graph.compile()
 if __name__ == "__main__":
 
     print("Generating graph...")
+
     png_data = sql_analyst.get_graph().draw_mermaid_png()
 
     with open("sql_agent_graph.png", "wb") as f:
@@ -211,6 +231,7 @@ if __name__ == "__main__":
     response = sql_analyst.invoke(input_schema)
 
     print("\n========== MESSAGES ==========")
+
     for message in response['messages']:
         print(message.content)
 
