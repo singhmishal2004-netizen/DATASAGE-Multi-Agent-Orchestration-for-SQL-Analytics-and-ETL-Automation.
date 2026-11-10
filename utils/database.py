@@ -1,15 +1,35 @@
 
+import os
+
 import psycopg2
 from psycopg2 import sql
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class DatabaseUtil:
 
-    def __init__(self, db_config):
+    def __init__(self, db_config=None):
         self.db_config = db_config
+        self.connection = None
 
         try:
-            self.connection = psycopg2.connect(**db_config)
+            database_url = os.getenv("DATABASE_URL")
+
+            if database_url:
+                # Connect using Neon PostgreSQL connection string
+                self.connection = psycopg2.connect(database_url)
+
+            elif db_config:
+                # Connect using local PostgreSQL configuration
+                self.connection = psycopg2.connect(**db_config)
+
+            else:
+                raise ValueError(
+                    "DATABASE_URL or db_config must be provided."
+                )
+
             print("Database connected successfully!")
 
         except Exception as e:
@@ -60,6 +80,7 @@ class DatabaseUtil:
 
                 for column in columns_list:
                     column_name, data_type = column
+
                     schema_info_context += (
                         f"  Column: {column_name}, "
                         f"Data Type: {data_type}\n"
@@ -83,7 +104,9 @@ class DatabaseUtil:
 
         except Exception as e:
             print(f"Error fetching schema details: {e}")
-            schema_info_context = f"Error fetching schema details: {e}"
+            schema_info_context = (
+                f"Error fetching schema details: {e}"
+            )
 
         finally:
             if cursor:
@@ -119,6 +142,7 @@ class DatabaseUtil:
                 cursor.close()
 
     def close_connection(self):
+
         if self.connection:
             self.connection.close()
             print("Database connection closed.")
@@ -130,15 +154,8 @@ class DatabaseUtil:
 
 if __name__ == "__main__":
 
-    db_config = {
-        "host": "localhost",
-        "port": 5432,
-        "user": "postgres",
-        "password": "password",
-        "database": "postgres"
-    }
-
-    obj = DatabaseUtil(db_config)
+    # Uses DATABASE_URL from your .env file
+    obj = DatabaseUtil()
 
     if obj.connection:
 
@@ -153,8 +170,12 @@ if __name__ == "__main__":
 
             # Test 2: Execute SQL query
             query_result = obj.execute_sql(
-                "SELECT * FROM information_schema.tables "
-                "WHERE table_schema = 'public' LIMIT 5;"
+                """
+                SELECT *
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                LIMIT 5;
+                """
             )
 
             print("\nQuery Result:")
